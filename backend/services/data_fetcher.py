@@ -178,61 +178,49 @@ class DataFetcher:
                 print(f"No XBRL facts found under us-gaap or ifrs-full for {ticker}")
                 return None
 
-            # Helper to extract metrics
-            def extract_fact(tags: List[str]) -> Tuple[Dict[str, float], Dict[str, float]]:
-                annual = {}
-                quarterly = {}
-                for tag in tags:
-                    if tag in us_gaap:
-                        fact_data = us_gaap[tag]
-                        units = fact_data.get("units", {})
-                        # Usually USD, can be shares
-                        entries = units.get("USD", []) or units.get("shares", []) or list(units.values())[0] if units else []
-                        
-                        for entry in entries:
-                            end_date = entry.get("end")
-                            form = entry.get("form")
-                            val = entry.get("val")
-                            
-                            if not end_date or val is None:
-                                continue
-                            
-                            # Standardize dates
-                            try:
-                                # Clean val
-                                val_float = float(val)
-                                if math.isnan(val_float) or math.isinf(val_float):
-                                    val_float = None
-                            except (ValueError, TypeError):
-                                val_float = None
-                                
-                            if form == "10-K" or entry.get("fp") == "FY":
-                                annual[end_date] = val_float
-                            elif form == "10-Q" or entry.get("fp", "").startswith("Q"):
-                                quarterly[end_date] = val_float
-                                
-                        if annual or quarterly:
-                            break # stop if we found data for this tag
-                return annual, quarterly
-
             # Define mapping of metrics to XBRL tags
             metrics_map = {
                 "income_statement": {
                     "Total Revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "RevenuesNetOfInterestExpense", "RevenueFromContractWithCustomerExcludingAssessedTaxAndInterestExpense"],
+                    "Cost of Revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices"],
                     "Gross Profit": ["GrossProfit"],
+                    "Research & Development": ["ResearchAndDevelopmentExpense"],
+                    "SG&A": ["SellingGeneralAndAdministrativeExpense", "SellingAndMarketingExpense", "GeneralAndAdministrativeExpense"],
+                    "Operating Expenses": ["OperatingExpenses", "OperatingCostsAndExpenses"],
                     "Operating Income": ["OperatingIncomeLoss"],
-                    "Net Income": ["NetIncomeLoss"]
+                    "Interest Expense": ["InterestExpense", "InterestExpenseDebt"],
+                    "Tax Expense": ["IncomeTaxExpenseBenefit", "IncomeTaxExpenseBenefitContinuingOperations"],
+                    "Net Income": ["NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"],
+                    "Basic EPS": ["EarningsPerShareBasic", "EarningsPerShareBasicAndDiluted"],
+                    "Diluted EPS": ["EarningsPerShareDiluted"]
                 },
                 "balance_sheet": {
+                    "Cash & Cash Equivalents": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndCashEquivalents", "Cash"],
+                    "Short-term Investments": ["ShortTermInvestments", "AvailableForSaleSecuritiesCurrent"],
+                    "Accounts Receivable": ["AccountsReceivableNetCurrent", "AccountsReceivableNet"],
+                    "Inventory": ["InventoryNet", "Inventories"],
+                    "Total Current Assets": ["AssetsCurrent"],
+                    "PP&E Net": ["PropertyPlantAndEquipmentNet"],
+                    "Goodwill & Intangibles": ["Goodwill", "IntangibleAssetsNetExcludingGoodwill", "GoodwillAndIntangibleAssetsNet"],
                     "Total Assets": ["Assets"],
+                    "Accounts Payable": ["AccountsPayableCurrent", "AccountsPayable"],
+                    "Short-term Debt": ["DebtCurrent", "ShortTermBorrowings", "LongTermDebtCurrent"],
+                    "Total Current Liabilities": ["LiabilitiesCurrent"],
+                    "Long-term Debt": ["LongTermDebtNoncurrent", "LongTermDebt"],
                     "Total Liabilities": ["Liabilities"],
+                    "Retained Earnings": ["RetainedEarningsAccumulatedDeficit"],
                     "Stockholders Equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
-                    "Cash & Cash Equivalents": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndCashEquivalents", "Cash"]
+                    "Total Liabilities & Equity": ["LiabilitiesAndStockholdersEquity"]
                 },
                 "cash_flow": {
+                    "Net Income (Cash Flow)": ["NetIncomeLoss"],
+                    "Depreciation & Amortization": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"],
+                    "Share-based Compensation": ["ShareBasedCompensation"],
                     "Operating Cash Flow": ["NetCashProvidedByUsedInOperatingActivities"],
                     "Capital Expenditures": ["PaymentsToAcquirePropertyPlantAndEquipment", "CapitalExpenditures"],
-                    "Net Income (Cash Flow)": ["NetIncomeLoss"]
+                    "Investing Cash Flow": ["NetCashProvidedByUsedInInvestingActivities"],
+                    "Financing Cash Flow": ["NetCashProvidedByUsedInFinancingActivities"],
+                    "Net Change in Cash": ["CashCashEquivalentsRestrictedCashAndCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect", "CashAndCashEquivalentsPeriodIncreaseDecrease"]
                 }
             }
 
@@ -245,10 +233,45 @@ class DataFetcher:
                 "quarterly_cash_flow": {}
             }
 
+            # Helper to extract metrics and merge in reverse order (preferred tags take precedence)
+            def extract_and_merge(tags: List[str]) -> tuple[dict[str, float], dict[str, float]]:
+                annual = {}
+                quarterly = {}
+                # Loop in reverse order so that preferred tags (which come first in the list) overwrite less preferred tags
+                for tag in reversed(tags):
+                    if tag in us_gaap:
+                        fact_data = us_gaap[tag]
+                        units = fact_data.get("units", {})
+                        entries = units.get("USD", []) or units.get("shares", []) or list(units.values())[0] if units else []
+                        
+                        for entry in entries:
+                            end_date = entry.get("end")
+                            form = entry.get("form")
+                            val = entry.get("val")
+                            
+                            if not end_date or val is None:
+                                continue
+                            
+                            # Standardize dates
+                            try:
+                                val_float = float(val)
+                                if math.isnan(val_float) or math.isinf(val_float):
+                                    continue
+                            except (ValueError, TypeError):
+                                continue
+                                
+                            fp = entry.get("fp") or ""
+                            if form == "10-K" or fp == "FY":
+                                annual[end_date] = val_float
+                            elif form == "10-Q" or fp.startswith("Q"):
+                                quarterly[end_date] = val_float
+                                
+                return annual, quarterly
+
             # Populate statements
             for sheet_type, metrics in metrics_map.items():
                 for label, tags in metrics.items():
-                    annual, quarterly = extract_fact(tags)
+                    annual, quarterly = extract_and_merge(tags)
                     
                     if sheet_type == "income_statement":
                         result["income_statement"][label] = annual
@@ -259,6 +282,36 @@ class DataFetcher:
                     elif sheet_type == "cash_flow":
                         result["cash_flow"][label] = annual
                         result["quarterly_cash_flow"][label] = quarterly
+
+            # Proxy Fallbacks
+            for prefix in ["", "quarterly_"]:
+                # 1. Operating Income proxy calculation if missing
+                inc = result[f"{prefix}income_statement"]
+                op_inc = inc.get("Operating Income")
+                if not op_inc:
+                    gp = inc.get("Gross Profit", {})
+                    sga = inc.get("SG&A", {})
+                    rd = inc.get("Research & Development", {})
+                    all_dates = set(gp.keys()) | set(sga.keys())
+                    computed_op = {}
+                    for d in all_dates:
+                        gp_val = gp.get(d, 0.0)
+                        sga_val = sga.get(d, 0.0)
+                        rd_val = rd.get(d, 0.0)
+                        if gp_val > 0:
+                            computed_op[d] = gp_val - sga_val - rd_val
+                    inc["Operating Income"] = computed_op
+                
+                # 2. Free Cash Flow calculation
+                cf = result[f"{prefix}cash_flow"]
+                ocf = cf.get("Operating Cash Flow", {})
+                capex = cf.get("Capital Expenditures", {})
+                computed_fcf = {}
+                for d in ocf.keys():
+                    ocf_val = ocf.get(d, 0.0)
+                    capex_val = abs(capex.get(d, 0.0))
+                    computed_fcf[d] = ocf_val - capex_val
+                cf["Free Cash Flow"] = computed_fcf
             
             # Check if we got any real data
             total_elements = sum(len(sheet) for sheet in result.values())
