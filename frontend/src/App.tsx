@@ -927,10 +927,10 @@ export default function App() {
                         {/* Ratio Card Deck */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                           {[
-                            { label: 'YoY Growth', val: agentOutputs.metrics_agent.metrics_summary.revenue_growth_yoy, desc: 'Revenue growth rate' },
-                            { label: 'Gross Margin', val: agentOutputs.metrics_agent.metrics_summary.gross_margin, desc: 'Cost optimization margin' },
-                            { label: 'Operating Margin', val: agentOutputs.metrics_agent.metrics_summary.operating_margin, desc: 'Operating efficiency ratio' },
-                            { label: 'Debt to Equity', val: agentOutputs.metrics_agent.metrics_summary.debt_to_equity, desc: 'Solvency risk multiple' }
+                            { label: 'YoY Growth', val: agentOutputs.metrics_agent.metrics_summary?.revenue_growth_yoy || 'N/A', desc: 'Revenue growth rate' },
+                            { label: 'Gross Margin', val: agentOutputs.metrics_agent.metrics_summary?.gross_margin || 'N/A', desc: 'Cost optimization margin' },
+                            { label: 'Operating Margin', val: agentOutputs.metrics_agent.metrics_summary?.operating_margin || 'N/A', desc: 'Operating efficiency ratio' },
+                            { label: 'Debt to Equity', val: agentOutputs.metrics_agent.metrics_summary?.debt_to_equity || 'N/A', desc: 'Solvency risk multiple' }
                           ].map((card, idx) => (
                             <div key={idx} className="bg-card p-4 rounded-xl border border-border flex flex-col space-y-1">
                               <span className="text-[10px] uppercase text-gray-500 tracking-wider font-semibold">{card.label}</span>
@@ -947,7 +947,7 @@ export default function App() {
                             <span>Trend & Profitability Analysis</span>
                           </h4>
                           <p className="text-xs text-gray-300 leading-relaxed">
-                            {agentOutputs.metrics_agent.trend_analysis}
+                            {agentOutputs.metrics_agent?.trend_analysis}
                           </p>
                         </div>
 
@@ -958,7 +958,7 @@ export default function App() {
                             <span>Financial Risk Signals</span>
                           </h4>
                           <p className="text-xs text-red-200 leading-relaxed">
-                            {agentOutputs.metrics_agent.risk_signals}
+                            {agentOutputs.metrics_agent?.risk_signals}
                           </p>
                         </div>
                       </div>
@@ -999,32 +999,32 @@ export default function App() {
                       <div>
                         <span className="text-[10px] uppercase text-gray-500 tracking-wider">Estimated Fair Value</span>
                         <p className="text-xl font-bold text-primary mt-1">
-                          ${agentOutputs.valuation_agent.dcf_valuation.estimated_fair_value.toFixed(2)}
+                          ${agentOutputs.valuation_agent.dcf_valuation?.estimated_fair_value?.toFixed(2) || '0.00'}
                         </p>
                       </div>
                       <div>
                         <span className="text-[10px] uppercase text-gray-500 tracking-wider">Implied Upside</span>
                         <p className="text-xl font-bold text-primary mt-1">
-                          {agentOutputs.valuation_agent.dcf_valuation.implied_upside}
+                          {agentOutputs.valuation_agent.dcf_valuation?.implied_upside || 'N/A'}
                         </p>
                       </div>
                       <div>
                         <span className="text-[10px] uppercase text-gray-500 tracking-wider">Trading Price</span>
                         <p className="text-xl font-bold text-gray-400 mt-1">
-                          ${agentOutputs.valuation_agent.dcf_valuation.current_price.toFixed(2)}
+                          ${agentOutputs.valuation_agent.dcf_valuation?.current_price?.toFixed(2) || '0.00'}
                         </p>
                       </div>
                       <div className="border-t border-border pt-4">
                         <span className="text-[9px] uppercase text-gray-500">WACC (Discount Rate)</span>
-                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation.wacc}</p>
+                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation?.wacc || 'N/A'}</p>
                       </div>
                       <div className="border-t border-border pt-4">
                         <span className="text-[9px] uppercase text-gray-500">Stage 1 Growth Rate</span>
-                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation.growth_stage_rate}</p>
+                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation?.growth_stage_rate || 'N/A'}</p>
                       </div>
                       <div className="border-t border-border pt-4">
                         <span className="text-[9px] uppercase text-gray-500">Terminal Growth Rate</span>
-                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation.terminal_growth_rate}</p>
+                        <p className="text-xs font-semibold text-white mt-0.5">{agentOutputs.valuation_agent.dcf_valuation?.terminal_growth_rate || 'N/A'}</p>
                       </div>
                     </div>
 
@@ -1044,7 +1044,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {agentOutputs.valuation_agent.peer_multiples.map((peer: any, idx: number) => (
+                          {(agentOutputs.valuation_agent.peer_multiples || []).map((peer: any, idx: number) => (
                             <tr 
                               key={idx} 
                               className={`border-b border-border/40 hover:bg-card/40 ${
@@ -1068,7 +1068,7 @@ export default function App() {
                         <span>Valuation Analyst Conclusion</span>
                       </h4>
                       <p className="text-xs text-gray-300 leading-relaxed">
-                        {agentOutputs.valuation_agent.valuation_conclusion}
+                        {agentOutputs.valuation_agent?.valuation_conclusion}
                       </p>
                     </div>
 
@@ -1097,23 +1097,27 @@ export default function App() {
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <span className="text-[10px] uppercase text-gray-500 tracking-wider">Sentiment Index</span>
-                          <p className="text-base font-bold text-white">{agentOutputs.news_agent.sentiment_score.toFixed(2)}</p>
+                          <p className="text-base font-bold text-white">
+                            {agentOutputs.news_agent.sentiment_score !== undefined && agentOutputs.news_agent.sentiment_score !== null
+                              ? agentOutputs.news_agent.sentiment_score.toFixed(2)
+                              : '0.00'}
+                          </p>
                         </div>
                         <span className={`px-4 py-1.5 rounded-full text-xs font-bold ${
-                          agentOutputs.news_agent.sentiment_label === 'Bullish' 
+                          agentOutputs.news_agent?.sentiment_label === 'Bullish' 
                             ? 'bg-primary/10 text-primary border border-primary/20'
-                            : agentOutputs.news_agent.sentiment_label === 'Bearish'
+                            : agentOutputs.news_agent?.sentiment_label === 'Bearish'
                             ? 'bg-red-500/10 text-red-500 border border-red-500/20'
                             : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
                         }`}>
-                          {agentOutputs.news_agent.sentiment_label}
+                          {agentOutputs.news_agent?.sentiment_label || 'Neutral'}
                         </span>
                       </div>
                     </div>
 
                     {/* News items list */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {agentOutputs.news_agent.news_summaries.map((news: any, idx: number) => {
+                      {(agentOutputs.news_agent.news_summaries || []).map((news: any, idx: number) => {
                         let badgeColor = 'bg-gray-500/10 text-gray-400 border-gray-500/20';
                         if (news.sentiment === 'Bullish') badgeColor = 'bg-primary/10 text-primary border-primary/20';
                         if (news.sentiment === 'Bearish') badgeColor = 'bg-red-500/10 text-red-500 border-red-500/20';
