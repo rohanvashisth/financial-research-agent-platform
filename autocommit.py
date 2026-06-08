@@ -11,7 +11,7 @@ def run_cmd(args):
         return e.returncode, e.stdout.strip(), e.stderr.strip()
 
 def main():
-    print("Auto-commit service initialized. Watching workspace for changes...", flush=True)
+    print("Auto-commit & push service initialized. Watching workspace for changes...", flush=True)
     
     # Verify we are in a git repository
     code, stdout, stderr = run_cmd(["git", "rev-parse", "--is-inside-work-tree"])
@@ -21,7 +21,7 @@ def main():
         
     while True:
         try:
-            # Check git status for changes (porcelain output is stable across git versions)
+            # Check git status for changes
             code, stdout, stderr = run_cmd(["git", "status", "--porcelain"])
             if code == 0 and stdout:
                 # Changes exist!
@@ -41,6 +41,14 @@ def main():
                 
                 if commit_code == 0:
                     print(f"Successfully committed changes: '{commit_msg}'", flush=True)
+                    
+                    # Push to remote GitHub repository
+                    print("Pushing committed changes to GitHub remote...", flush=True)
+                    push_code, push_out, push_err = run_cmd(["git", "push", "origin", "main"])
+                    if push_code == 0:
+                        print("Successfully pushed changes to remote origin/main.", flush=True)
+                    else:
+                        print(f"Push to remote failed: {push_err}", file=sys.stderr, flush=True)
                 else:
                     print(f"Commit failed: {commit_err}", file=sys.stderr, flush=True)
             elif code != 0:
