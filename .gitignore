@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Databases & data
+data/*.db
+data/reports/
+data/filings/
+backend/scratch/test_*.py
+backend/scratch/find_*.py
+backend/scratch/check_*.py
+backend/scratch/list_*.py
+
+# Node/Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.svelte-kit/
+frontend/.next/
+frontend/out/
+
+# IDEs & System
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+
+# Environments
+.env
+.env.local
+.env.production
