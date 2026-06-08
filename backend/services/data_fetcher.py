@@ -234,9 +234,11 @@ class DataFetcher:
             }
 
             # Helper to extract metrics and merge in reverse order (preferred tags take precedence)
-            def extract_and_merge(tags: List[str]) -> tuple[dict[str, float], dict[str, float]]:
+            def extract_and_merge(sheet_type: str, tags: List[str]) -> tuple[dict[str, float], dict[str, float]]:
                 annual = {}
                 quarterly = {}
+                from datetime import datetime
+                
                 # Loop in reverse order so that preferred tags (which come first in the list) overwrite less preferred tags
                 for tag in reversed(tags):
                     if tag in us_gaap:
@@ -246,9 +248,7 @@ class DataFetcher:
                         
                         for entry in entries:
                             end_date = entry.get("end")
-                            form = entry.get("form")
                             val = entry.get("val")
-                            
                             if not end_date or val is None:
                                 continue
                             
@@ -260,18 +260,42 @@ class DataFetcher:
                             except (ValueError, TypeError):
                                 continue
                                 
+                            form = entry.get("form")
                             fp = entry.get("fp") or ""
-                            if form == "10-K" or fp == "FY":
-                                annual[end_date] = val_float
-                            elif form == "10-Q" or fp.startswith("Q"):
-                                quarterly[end_date] = val_float
+                            start_date = entry.get("start")
+                            
+                            if sheet_type == "balance_sheet":
+                                # Point-in-time metrics: classify by form/fp
+                                if form == "10-K" or fp == "FY":
+                                    annual[end_date] = val_float
+                                elif form == "10-Q" or fp.startswith("Q"):
+                                    quarterly[end_date] = val_float
+                            else:
+                                # Flow metrics: classify by duration (days)
+                                if start_date:
+                                    try:
+                                        s_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                                        e_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                                        days = (e_dt - s_dt).days
+                                        if 330 <= days <= 380:
+                                            annual[end_date] = val_float
+                                        elif 80 <= days <= 100:
+                                            quarterly[end_date] = val_float
+                                    except:
+                                        pass
+                                else:
+                                    # Fallback if start_date is missing
+                                    if form == "10-K" or fp == "FY":
+                                        annual[end_date] = val_float
+                                    elif form == "10-Q" or fp.startswith("Q"):
+                                        quarterly[end_date] = val_float
                                 
                 return annual, quarterly
 
             # Populate statements
             for sheet_type, metrics in metrics_map.items():
                 for label, tags in metrics.items():
-                    annual, quarterly = extract_and_merge(tags)
+                    annual, quarterly = extract_and_merge(sheet_type, tags)
                     
                     if sheet_type == "income_statement":
                         result["income_statement"][label] = annual
