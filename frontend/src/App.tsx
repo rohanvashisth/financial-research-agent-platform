@@ -10,7 +10,6 @@ import {
   Database, 
   Share2, 
   CheckCircle2, 
-  Clock, 
   ChevronRight,
   RefreshCw,
   Info
@@ -453,7 +452,7 @@ export default function App() {
     const quarterlyDates = Object.keys(quarterlyData[firstMetric] || {}).sort((a, b) => b.localeCompare(a)).slice(0, 3);
 
     const latestAnnualDate = annualDates[0];
-    const columns = [];
+    const columns: { date: string; type: string }[] = [];
     if (latestAnnualDate) columns.push({ date: latestAnnualDate, type: 'Annual (LTM)' });
     
     // Last 3 Quarters
