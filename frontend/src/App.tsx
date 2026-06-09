@@ -334,6 +334,84 @@ export default function App() {
     return 'text-gray-500 border-border bg-card';
   };
 
+  const getMetricStyle = (metric: string) => {
+    const finalTotals = [
+      'net income',
+      'total liabilities & equity',
+      'free cash flow'
+    ];
+
+    const subtotals = [
+      'total revenue',
+      'gross profit',
+      'operating expenses',
+      'operating income',
+      'total current assets',
+      'total assets',
+      'total current liabilities',
+      'total liabilities',
+      'stockholders equity',
+      'operating cash flow',
+      'investing cash flow',
+      'financing cash flow',
+      'net change in cash'
+    ];
+
+    const indented = [
+      'cost of revenue',
+      'research & development',
+      'sg&a',
+      'interest expense',
+      'tax expense',
+      'cash & cash equivalents',
+      'short-term investments',
+      'accounts receivable',
+      'inventory',
+      'pp&e net',
+      'goodwill & intangibles',
+      'accounts payable',
+      'short-term debt',
+      'long-term debt',
+      'retained earnings',
+      'net income (cash flow)',
+      'depreciation & amortization',
+      'share-based compensation',
+      'capital expenditures'
+    ];
+
+    const lower = metric.toLowerCase().trim();
+
+    if (finalTotals.includes(lower)) {
+      return {
+        rowClass: "border-t border-border/60 hover:bg-card/50 text-white font-bold bg-white/5",
+        metricClass: "p-3 pl-4 text-white font-bold border-b-4 border-double border-primary/50",
+        cellClass: "p-3 text-white font-bold font-mono border-b-4 border-double border-primary/50"
+      };
+    }
+
+    if (subtotals.includes(lower)) {
+      return {
+        rowClass: "border-t border-b border-border/80 hover:bg-card/45 text-white font-semibold bg-white/2",
+        metricClass: "p-3 pl-4 text-white font-semibold",
+        cellClass: "p-3 text-white font-semibold font-mono"
+      };
+    }
+
+    if (indented.includes(lower)) {
+      return {
+        rowClass: "border-b border-border/20 hover:bg-card/30 text-gray-400",
+        metricClass: "p-3 pl-8 text-gray-400 font-normal italic",
+        cellClass: "p-3 text-gray-400 font-normal font-mono"
+      };
+    }
+
+    return {
+      rowClass: "border-b border-border/40 hover:bg-card/40 text-gray-300",
+      metricClass: "p-3 pl-4 text-gray-300 font-medium",
+      cellClass: "p-3 text-gray-300 font-mono"
+    };
+  };
+
   const renderFinancialTable = (type: 'income' | 'balance' | 'cash') => {
     if (!financials) {
       return (
@@ -403,9 +481,9 @@ export default function App() {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-border bg-card/20 text-gray-500 font-semibold sticky top-0 bg-card z-10">
-                <th className="p-3">Financial Metric</th>
+                <th className="p-3 pl-4">Financial Metric</th>
                 {columns.map((col, idx) => (
-                  <th key={idx} className="p-3">
+                  <th key={idx} className="p-3 text-right pr-6">
                     <div>{col.date}</div>
                     <div className="text-[9px] text-primary font-normal">{col.type}</div>
                   </th>
@@ -415,15 +493,16 @@ export default function App() {
             <tbody>
               {metrics.map((metric, idx) => {
                 if (metric.toLowerCase() === 'ticker' || metric.toLowerCase() === 'cik') return null;
+                const style = getMetricStyle(metric);
                 return (
-                  <tr key={idx} className="border-b border-border/40 hover:bg-card/40 text-gray-300">
-                    <td className="p-3 font-semibold text-white">{metric}</td>
+                  <tr key={idx} className={style.rowClass}>
+                    <td className={style.metricClass}>{metric}</td>
                     {columns.map((col, cIdx) => {
                       const val = col.type.startsWith('Annual')
                         ? annualData[metric]?.[col.date]
                         : quarterlyData[metric]?.[col.date];
                       return (
-                        <td key={cIdx} className="p-3 font-mono">
+                        <td key={cIdx} className={`p-3 text-right pr-6 ${style.cellClass}`}>
                           {formatAmount(val)}
                         </td>
                       );
