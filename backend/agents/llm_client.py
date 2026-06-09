@@ -1,4 +1,5 @@
 import json
+from typing import Any
 from google import genai
 from google.genai import types
 from google.genai import errors
@@ -52,6 +53,19 @@ class LLMClient:
         ticker = ticker.upper().strip()
         system_prompt_lower = system_prompt.lower()
         
+        # 0. RAG Chat query check (schema is None, and not report synthesis prompt)
+        if schema is None and not ("synthesize" in system_prompt_lower or "memo" in system_prompt_lower):
+            user_prompt_lower = user_prompt.lower()
+            if "ai" in user_prompt_lower or "artificial intelligence" in user_prompt_lower:
+                if ticker in ["AAPL", "APPLE"]:
+                    return f"Based on Apple's latest filing context, Apple is focusing heavily on its proprietary on-device AI system, Apple Intelligence, integrated across iOS, iPadOS, and macOS. The company has accelerated capital spending for customized server infrastructure and edge-AI processors, positioning themselves as a leader in private, secure cloud compute. These efforts are expected to catalyze a significant hardware upgrade cycle (specifically for iPhone 15 Pro/16 and M-series Macs) and expand their high-margin Services ecosystem."
+                else:
+                    return f"According to {ticker}'s latest SEC filings, the company is scaling up its capital expenditures to build out high-performance computing data centers, acquire GPU assets, and integrate Generative AI capabilities across its product lines. Management expects these investments to support enterprise migration and drive substantial productivity gains."
+            elif "risk" in user_prompt_lower:
+                return f"For {ticker}, the primary risks outlined in the filings include: (1) high capital expenditure demands for next-generation technology developments, (2) intense competition from other hyperscale platform providers, and (3) global regulatory and antitrust reviews targeting bundle packaging or payment fee structures."
+            else:
+                return f"Based on the SEC filing context for {ticker}, the company is experiencing solid demand across its primary operational divisions. Management highlighted continued execution of capital returns (dividends and buybacks) and a strategic pivot toward integration of cloud and cognitive services to drive operational efficiency."
+
         # 1. Report Agent (Synthesize Markdown memo) check first to avoid keyword clashes
         if "synthesize" in system_prompt_lower or "memo" in system_prompt_lower:
             return f"""# Equity Research Memo: {ticker}
