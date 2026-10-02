@@ -4,7 +4,7 @@ import json
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from google import genai
-from google.genai import errors
+from google.genai import types, errors
 from backend.config import settings
 
 class VectorStore:
@@ -98,15 +98,20 @@ class VectorStore:
             return [0.0] * 768
 
         if self.client:
-            try:
-                response = self.client.models.embed_content(
-                    model="text-embedding-004",
-                    contents=text
-                )
-                if response and response.embedding and response.embedding.values:
-                    return response.embedding.values
-            except Exception as e:
-                print(f"Gemini embedding generation failed: {e}. Generating fallback mock vector.")
+            for model_name in ["gemini-embedding-001", "text-embedding-004"]:
+                try:
+                    response = self.client.models.embed_content(
+                        model=model_name,
+                        contents=text,
+                        config=types.EmbedContentConfig(output_dimensionality=768)
+                    )
+                    if hasattr(response, "embeddings") and response.embeddings:
+                        return response.embeddings[0].values
+                    if hasattr(response, "embedding") and response.embedding and hasattr(response.embedding, "values"):
+                        return response.embedding.values
+                except Exception as e:
+                    continue
+            print("Gemini embedding generation failed with models. Generating fallback mock vector.")
         
         # Consistent mock embedding generation for demo using simple word hash
         # To make it slightly semantic: count specific financial keywords to bias the vector
