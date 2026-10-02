@@ -178,6 +178,6 @@ class ResearchWorkflow:
             return error_payload
             
         finally:
-            self._running_jobs.remove(ticker)
+            self._running_jobs.discard(ticker)
 
 workflow = ResearchWorkflow()

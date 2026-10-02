@@ -1,4 +1,5 @@
 import asyncio
+import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -209,5 +210,3 @@ async def websocket_research(websocket: WebSocket, symbol: str):
             await websocket.close()
         except Exception:
             pass
-
-import json

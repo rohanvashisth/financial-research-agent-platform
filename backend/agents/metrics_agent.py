@@ -43,15 +43,15 @@ class MetricsAgent:
             dates = sorted(list(first_metric.keys()), reverse=True) # newest first
 
         if not dates:
-            # Default fallback mock ratios if statements are empty
+            # Default empty ratios if statements are missing
             return {
-                "revenue_growth_yoy": "+15.0%",
-                "gross_margin": "68.0%",
-                "operating_margin": "43.0%",
-                "net_margin": "34.0%",
-                "debt_to_equity": "0.35",
-                "return_on_equity": "35.0%",
-                "free_cash_flow_growth": "+12.0%"
+                "revenue_growth_yoy": "N/A",
+                "gross_margin": "N/A",
+                "operating_margin": "N/A",
+                "net_margin": "N/A",
+                "debt_to_equity": "N/A",
+                "return_on_equity": "N/A",
+                "free_cash_flow_growth": "N/A"
             }
 
         # Helper to get a metric value for a date, trying case-insensitive variations
@@ -90,7 +90,7 @@ class MetricsAgent:
         equity_latest = get_val(bal, equity_queries, latest_date)
 
         ocf_latest = get_val(cf, ocf_queries, latest_date)
-        capex_latest = abs(get_val(cf, capex_queries, latest_date)) # capex is usually negative in cash flow statement
+        capex_latest = abs(get_val(cf, capex_queries, latest_date))
 
         fcf_latest = ocf_latest - capex_latest
 
@@ -126,6 +126,50 @@ class MetricsAgent:
             "free_cash_flow_growth": fcf_growth
         }
 
+    def _synthesize_analysis(self, ticker: str, ratios: Dict[str, Any], financials: Dict[str, Any]) -> Dict[str, Any]:
+        """Synthesizes dynamic trend analysis and risk signals from real calculated numbers."""
+        inc = financials.get("income_statement", {})
+        rev_val = "N/A"
+        if inc:
+            for k, v in inc.items():
+                if "revenue" in k.lower() and v:
+                    latest_d = sorted(list(v.keys()), reverse=True)[0]
+                    if v[latest_d] is not None:
+                        rev_val = f"${float(v[latest_d]):,.0f}"
+                        break
+
+        trend_text = (
+            f"Financial analysis for {ticker} reflects latest annual revenue at {rev_val} with a YoY growth rate of {ratios.get('revenue_growth_yoy', 'N/A')}. "
+            f"Gross margin stands at {ratios.get('gross_margin', 'N/A')} and operating margin registered at {ratios.get('operating_margin', 'N/A')}, "
+            f"yielding a net margin of {ratios.get('net_margin', 'N/A')}. Free cash flow generation exhibits a {ratios.get('free_cash_flow_growth', 'N/A')} YoY trajectory, "
+            f"providing capital for ongoing operational reinvestment and debt service."
+        )
+
+        risk_list = []
+        d_to_e = ratios.get("debt_to_equity", "N/A")
+        if d_to_e != "N/A":
+            try:
+                val = float(d_to_e)
+                if val > 2.0:
+                    risk_list.append(f"Elevated balance sheet leverage (Debt-to-Equity of {val:.2f})")
+                elif val < 0.5:
+                    risk_list.append(f"Conservative debt profile (Debt-to-Equity of {val:.2f})")
+            except ValueError:
+                pass
+
+        op_m = ratios.get("operating_margin", "N/A")
+        if op_m != "N/A" and "-" in op_m:
+            risk_list.append("Negative operating margin presents near-term profitability pressure")
+
+        if not risk_list:
+            risk_list.append(f"Continuous monitoring of operating cost inflation and capital deployment required for {ticker}")
+
+        return {
+            "metrics_summary": ratios,
+            "trend_analysis": trend_text,
+            "risk_signals": ". ".join(risk_list) + "."
+        }
+
     async def run(self, ticker: str) -> Dict[str, Any]:
         """Runs the financial metric reasoning loop."""
         ticker = ticker.upper().strip()
@@ -136,9 +180,9 @@ class MetricsAgent:
         
         # 2. Compute mathematical ratios in Python
         computed_ratios = self._calculate_financial_ratios(financials)
+        dynamic_fallback = self._synthesize_analysis(ticker, computed_ratios, financials)
         
         # 3. Create context for LLM
-        # Limit statement content size for prompt safety
         statement_summary = {
             "income_statement": {k: {date: f"{val:,.0f}" if isinstance(val, (int, float)) else val for date, val in v.items()} for k, v in list(financials.get("income_statement", {}).items())[:12]},
             "balance_sheet": {k: {date: f"{val:,.0f}" if isinstance(val, (int, float)) else val for date, val in v.items()} for k, v in list(financials.get("balance_sheet", {}).items())[:12]},
@@ -164,13 +208,9 @@ class MetricsAgent:
         
         try:
             res = json.loads(result_json)
-            # Ensure computed ratios are exact
             res["metrics_summary"] = computed_ratios
             return res
-        except Exception as e:
-            print(f"Metrics agent: Error parsing JSON from LLM: {e}")
-            fallback = json.loads(llm_client._generate_mock_response(self.system_prompt, user_prompt, ticker, MetricsAnalysisSchema))
-            fallback["metrics_summary"] = computed_ratios
-            return fallback
+        except Exception:
+            return dynamic_fallback
 
 metrics_agent = MetricsAgent()
