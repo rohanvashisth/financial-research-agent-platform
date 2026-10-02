@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from backend.agents.llm_client import llm_client
 from backend.services.data_fetcher import data_fetcher
