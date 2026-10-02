@@ -37,10 +37,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for the frontend dev server
+# Enable CORS for the frontend dev server and deployed GitHub Pages
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:5173", "*"],
+    allow_origins=[
+        settings.FRONTEND_URL,
+        "http://localhost:5173",
+        "https://rohanvashisth.github.io",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,6 +65,10 @@ def read_root():
         "mode": settings.RUN_MODE,
         "llm_configured": bool(settings.GEMINI_API_KEY)
     }
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
 
 @app.get("/api/ticker/{symbol}")
 def get_ticker_data(symbol: str):

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: financial-research-backend
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: PYTHONPATH
+        value: .
+      - key: RUN_MODE
+        value: local
+      - key: SEC_USER_AGENT
+        value: FinancialResearchAgent/1.0 (researcher@example.com)
+      - key: FRONTEND_URL
+        value: https://rohanvashisth.github.io
+      - key: GEMINI_API_KEY
+        sync: false
