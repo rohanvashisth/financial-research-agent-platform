@@ -135,18 +135,20 @@ export default function App() {
       const res = await fetch(`${API_BASE_URL}/api/reports/${symbol}`);
       if (res.ok) {
         const data = await res.json();
-        setReportMarkdown(data.report);
-        setAgentOutputs(data.agent_outputs);
-        // Set steps to completed
-        setPipelineStages({
-          init: 'completed',
-          filing: 'completed',
-          metrics: 'completed',
-          news: 'completed',
-          valuation: 'completed',
-          report: 'completed'
-        });
-        return true;
+        if (data.report) {
+          setReportMarkdown(data.report);
+          setAgentOutputs(data.agent_outputs);
+          // Set steps to completed
+          setPipelineStages({
+            init: 'completed',
+            filing: 'completed',
+            metrics: 'completed',
+            news: 'completed',
+            valuation: 'completed',
+            report: 'completed'
+          });
+          return true;
+        }
       }
     } catch (e) {
       console.log("No existing report cached.");

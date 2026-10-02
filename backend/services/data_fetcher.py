@@ -4,10 +4,30 @@ import json
 import re
 import time
 import math
+import logging
+import os
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from bs4 import BeautifulSoup
 from backend.config import settings
+
+# Suppress noisy external library warnings
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+
+@contextmanager
+def suppress_stderr():
+    old_stderr = sys.stderr
+    try:
+        with open(os.devnull, "w") as devnull:
+            sys.stderr = devnull
+            yield
+    except Exception:
+        yield
+    finally:
+        sys.stderr = old_stderr
 
 class DataFetcher:
     def __init__(self):
@@ -82,8 +102,9 @@ class DataFetcher:
         """Fetches metadata about the company from Yahoo Finance or SEC EDGAR."""
         ticker = ticker.upper().strip()
         try:
-            stock = yf.Ticker(ticker, session=self.yf_session)
-            info = stock.info
+            with suppress_stderr():
+                stock = yf.Ticker(ticker, session=self.yf_session)
+                info = stock.info
             
             return {
                 "ticker": ticker,
@@ -136,8 +157,9 @@ class DataFetcher:
         """Fetches stock price history for charting."""
         ticker = ticker.upper().strip()
         try:
-            stock = yf.Ticker(ticker, session=self.yf_session)
-            hist = stock.history(period=period)
+            with suppress_stderr():
+                stock = yf.Ticker(ticker, session=self.yf_session)
+                hist = stock.history(period=period)
             
             data = []
             for date, row in hist.iterrows():

@@ -90,13 +90,22 @@ def get_report(symbol: str):
     result_cache = settings.DATA_DIR / "reports" / f"{symbol}_results.json"
     
     if not result_cache.exists():
-        raise HTTPException(status_code=404, detail=f"No research report found for ticker {symbol}. Please run research first.")
+        return {
+            "status": "not_found",
+            "report": None,
+            "agent_outputs": None
+        }
         
     try:
         with open(result_cache, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read report data: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "report": None,
+            "agent_outputs": None
+        }
 
 @app.post("/api/research/{symbol}")
 async def trigger_research(symbol: str):
