@@ -1,6 +1,7 @@
 import sqlite3
 import re
 import json
+import time
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from google import genai
@@ -11,6 +12,8 @@ class VectorStore:
     def __init__(self):
         self.mode = settings.RUN_MODE
         self.client = None
+        self._quota_cooldown_until = 0.0
+        self._warned_quota = False
         self._init_gemini_client()
         self._init_db()
 
@@ -97,21 +100,29 @@ class VectorStore:
         if not text:
             return [0.0] * 768
 
-        if self.client:
-            for model_name in ["gemini-embedding-001", "text-embedding-004"]:
-                try:
-                    response = self.client.models.embed_content(
-                        model=model_name,
-                        contents=text,
-                        config=types.EmbedContentConfig(output_dimensionality=768)
-                    )
-                    if hasattr(response, "embeddings") and response.embeddings:
-                        return response.embeddings[0].values
-                    if hasattr(response, "embedding") and response.embedding and hasattr(response.embedding, "values"):
-                        return response.embedding.values
-                except Exception as e:
-                    continue
-            print("Gemini embedding generation failed with models. Generating fallback mock vector.")
+        now = time.time()
+        if self.client and now >= self._quota_cooldown_until:
+            try:
+                response = self.client.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=text,
+                    config=types.EmbedContentConfig(output_dimensionality=768)
+                )
+                if hasattr(response, "embeddings") and response.embeddings:
+                    return response.embeddings[0].values
+                if hasattr(response, "embedding") and response.embedding and hasattr(response.embedding, "values"):
+                    return response.embedding.values
+            except Exception as e:
+                err_msg = str(e)
+                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                    self._quota_cooldown_until = now + 60.0  # Cooldown for 60s
+                    if not self._warned_quota:
+                        print("Gemini embedding rate limit reached (429 RESOURCE_EXHAUSTED). Falling back to local semantic vectors.")
+                        self._warned_quota = True
+                else:
+                    if not self._warned_quota:
+                        print(f"Gemini embedding API call failed: {e}. Falling back to local semantic vectors.")
+                        self._warned_quota = True
         
         # Consistent mock embedding generation for demo using simple word hash
         # To make it slightly semantic: count specific financial keywords to bias the vector

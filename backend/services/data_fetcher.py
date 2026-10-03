@@ -724,14 +724,19 @@ class DataFetcher:
                 chunk_id += 1
                 
             idx += (chunk_size - overlap)
+
+        # Prioritize key analytical sections (Risk Factors, MD&A) and cap total chunks
+        priority_chunks = [c for c in chunks if c["section"] in ["Item 1A: Risk Factors", "Item 7: MD&A"]]
+        general_chunks = [c for c in chunks if c["section"] == "General"]
+        selected_chunks = (priority_chunks[:15] + general_chunks[:10]) if priority_chunks else chunks[:20]
             
         try:
             with open(filing_cache, "w", encoding="utf-8") as f:
-                json.dump(chunks, f, indent=2)
+                json.dump(selected_chunks, f, indent=2)
         except Exception as e:
             print(f"Error caching chunks: {e}")
             
-        return chunks
+        return selected_chunks
 
     def _generate_authentic_filing_chunks(self, ticker: str, filing_type: str) -> List[Dict[str, Any]]:
         """Generates authentic filing text chunks from SEC metadata and real company profile."""
