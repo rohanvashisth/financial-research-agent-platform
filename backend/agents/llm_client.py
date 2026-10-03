@@ -1,4 +1,5 @@
 import json
+import concurrent.futures
 from typing import Any
 from google import genai
 from google.genai import types
@@ -21,7 +22,7 @@ class LLMClient:
         response_schema: Any = None, 
         ticker: str = "MSFT"
     ) -> str:
-        """Invokes Gemini LLM. If key is missing, triggers fallback mock generator."""
+        """Invokes Gemini LLM. If key is missing or call hangs/fails, triggers fallback mock generator."""
         if self.client:
             try:
                 config = types.GenerateContentConfig(
@@ -33,15 +34,22 @@ class LLMClient:
                     config.response_mime_type = "application/json"
                     config.response_schema = response_schema
                 
-                # Using gemini-2.5-flash as the standard fast reasoning model
-                response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=user_prompt,
-                    config=config
-                )
+                # Using gemini-2.5-flash with a strict 15-second timeout to prevent proxy drops
+                def _do_generate():
+                    return self.client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=user_prompt,
+                        config=config
+                    )
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_do_generate)
+                    response = future.result(timeout=15.0)
                 
                 if response and response.text:
                     return response.text
+            except concurrent.futures.TimeoutError:
+                print(f"Gemini LLM call timed out after 15s for {ticker}. Seamlessly falling back to dynamic generator.")
             except Exception as e:
                 print(f"Gemini LLM call failed: {e}. Falling back to mock generator.")
         
