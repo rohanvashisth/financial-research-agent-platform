@@ -4,7 +4,7 @@ import yfinance as yf
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from backend.agents.llm_client import llm_client
-from backend.services.data_fetcher import data_fetcher
+from backend.services.data_fetcher import data_fetcher, suppress_stderr
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
     if val is None:
@@ -48,20 +48,42 @@ class ValuationAgent:
     def _run_dcf_calculator(self, ticker: str, financials: Dict[str, Any], current_price: float) -> Dict[str, Any]:
         """Runs a 5-year DCF calculation in Python using live price and real balance sheet numbers."""
         try:
-            stock = yf.Ticker(ticker)
-            info = stock.info or {}
+            info = {}
+            try:
+                with suppress_stderr():
+                    stock = yf.Ticker(ticker)
+                    info = stock.info or {}
+            except Exception:
+                pass
             
             # Fetch inputs
             shares = _safe_float(info.get("sharesOutstanding"), default=0.0)
+            if shares <= 0:
+                shares = data_fetcher.get_shares_outstanding(ticker)
             market_cap = _safe_float(info.get("marketCap"), default=0.0)
+            if market_cap <= 0 and shares > 0 and current_price > 0:
+                market_cap = shares * current_price
             if shares <= 0 and market_cap > 0 and current_price > 0:
                 shares = market_cap / current_price
             if shares <= 0:
                 shares = 1_000_000_000.0
 
             # Retrieve Cash & Debt
+            bs = financials.get("balance_sheet", {})
             cash = _safe_float(info.get("totalCash"), default=0.0)
+            if cash <= 0:
+                cash_dict = bs.get("Cash & Cash Equivalents", {}) or bs.get("Cash and Cash Equivalents", {})
+                if cash_dict:
+                    latest_d = sorted(list(cash_dict.keys()), reverse=True)[0]
+                    cash = _safe_float(cash_dict.get(latest_d))
+
             debt = _safe_float(info.get("totalDebt"), default=0.0)
+            if debt <= 0:
+                lt_dict = bs.get("Long-Term Debt", {})
+                st_dict = bs.get("Short-Term Debt", {})
+                if lt_dict or st_dict:
+                    latest_d = sorted(list(lt_dict.keys() or st_dict.keys()), reverse=True)[0]
+                    debt = _safe_float(lt_dict.get(latest_d)) + _safe_float(st_dict.get(latest_d))
 
             # Calculate latest FCF from actual cash flow statement
             cf = financials.get("cash_flow", {})
@@ -222,24 +244,36 @@ class ValuationAgent:
         peers = data_fetcher.get_competitors(ticker, info.get("sector", "Commercial"))
         
         peer_multiples = []
-        stock = yf.Ticker(ticker)
-        stock_info = stock.info or {}
+        stock_info = {}
+        try:
+            with suppress_stderr():
+                stock = yf.Ticker(ticker)
+                stock_info = stock.info or {}
+        except Exception:
+            pass
+
+        pe_val = _safe_float(info.get("pe_ratio") or stock_info.get("trailingPE"))
+        ps_val = _safe_float(info.get("price_to_sales") or stock_info.get("priceToSalesTrailing12Months"))
+        ev_val = _safe_float(stock_info.get("enterpriseToEbitda"))
+
         peer_multiples.append({
             "ticker": ticker,
-            "pe_ratio": _safe_float(info.get("pe_ratio") or stock_info.get("trailingPE")),
-            "ps_ratio": _safe_float(info.get("price_to_sales") or stock_info.get("priceToSalesTrailing12Months")),
-            "ev_ebitda": _safe_float(stock_info.get("enterpriseToEbitda"))
+            "pe_ratio": pe_val,
+            "ps_ratio": ps_val,
+            "ev_ebitda": ev_val
         })
 
         for peer in peers[:4]:
             try:
-                p_stock = yf.Ticker(peer)
-                p_info = p_stock.info or {}
+                p_info = data_fetcher.get_company_info(peer)
+                p_pe = _safe_float(p_info.get("pe_ratio"))
+                p_ps = _safe_float(p_info.get("price_to_sales"))
+                p_ev = _safe_float(p_info.get("ev_ebitda", 0.0))
                 peer_multiples.append({
                     "ticker": peer,
-                    "pe_ratio": _safe_float(p_info.get("trailingPE")),
-                    "ps_ratio": _safe_float(p_info.get("priceToSalesTrailing12Months")),
-                    "ev_ebitda": _safe_float(p_info.get("enterpriseToEbitda"))
+                    "pe_ratio": p_pe,
+                    "ps_ratio": p_ps,
+                    "ev_ebitda": p_ev
                 })
             except Exception:
                 peer_multiples.append({"ticker": peer, "pe_ratio": 0.0, "ps_ratio": 0.0, "ev_ebitda": 0.0})

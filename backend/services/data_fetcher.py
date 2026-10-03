@@ -109,6 +109,45 @@ class DataFetcher:
 
         return None
 
+    def get_shares_outstanding(self, ticker: str) -> float:
+        """Retrieves shares outstanding from SEC EDGAR company facts or balance sheet."""
+        ticker = ticker.upper().strip()
+        cik = self.get_cik(ticker)
+        if cik:
+            try:
+                url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+                res = requests.get(url, headers=self.headers, timeout=6)
+                if res.status_code == 200:
+                    data = res.json().get("facts", {})
+                    # 1. Check DEI EntityCommonStockSharesOutstanding
+                    dei_shares = data.get("dei", {}).get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])
+                    if dei_shares:
+                        latest = sorted(dei_shares, key=lambda x: x.get("end", ""))[-1]
+                        val = latest.get("val")
+                        if val and val > 0:
+                            return float(val)
+                    # 2. Check US-GAAP
+                    usgaap = data.get("us-gaap", {})
+                    for tag in ["CommonStockSharesOutstanding", "WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingBasic"]:
+                        items = usgaap.get(tag, {}).get("units", {}).get("shares", [])
+                        if items:
+                            latest = sorted(items, key=lambda x: x.get("end", ""))[-1]
+                            val = latest.get("val")
+                            if val and val > 0:
+                                return float(val)
+                    # 3. Check IFRS-FULL for foreign issuers
+                    ifrs = data.get("ifrs-full", {})
+                    for tag in ["NumberOfSharesOutstanding", "WeightedAverageNumberOfShares"]:
+                        items = ifrs.get(tag, {}).get("units", {}).get("shares", [])
+                        if items:
+                            latest = sorted(items, key=lambda x: x.get("end", ""))[-1]
+                            val = latest.get("val")
+                            if val and val > 0:
+                                return float(val)
+            except Exception:
+                pass
+        return 0.0
+
     def get_company_info(self, ticker: str) -> Dict[str, Any]:
         """Fetches metadata about the company from Yahoo Finance and SEC EDGAR."""
         ticker = ticker.upper().strip()
@@ -170,6 +209,38 @@ class DataFetcher:
                 hist = self.get_stock_history(ticker, period="5d")
                 if hist:
                     current_price = hist[-1]["close"]
+            except Exception:
+                pass
+
+        # If market_cap is missing or 0 (e.g. cloud host blocked by Yahoo), calculate from SEC shares
+        if not market_cap or market_cap <= 0:
+            shares = self.get_shares_outstanding(ticker)
+            if shares > 0 and current_price and current_price > 0:
+                market_cap = round(shares * current_price, 2)
+
+        # If trailing_pe or price_to_sales is missing, derive dynamically from SEC financial statements
+        if (trailing_pe == "N/A" or not trailing_pe or trailing_pe <= 0 or price_to_sales == "N/A" or not price_to_sales or price_to_sales <= 0) and market_cap > 0:
+            try:
+                fin = self.get_financial_statements(ticker)
+                inc = fin.get("income_statement", {})
+                
+                # Derive PE ratio
+                if trailing_pe == "N/A" or not trailing_pe or trailing_pe <= 0:
+                    ni_dict = inc.get("Net Income", {})
+                    if ni_dict:
+                        latest_date = sorted(list(ni_dict.keys()), reverse=True)[0]
+                        latest_ni = float(ni_dict[latest_date])
+                        if latest_ni > 0:
+                            trailing_pe = round(market_cap / latest_ni, 1)
+
+                # Derive PS ratio
+                if price_to_sales == "N/A" or not price_to_sales or price_to_sales <= 0:
+                    rev_dict = inc.get("Total Revenue", {})
+                    if rev_dict:
+                        latest_date = sorted(list(rev_dict.keys()), reverse=True)[0]
+                        latest_rev = float(rev_dict[latest_date])
+                        if latest_rev > 0:
+                            price_to_sales = round(market_cap / latest_rev, 1)
             except Exception:
                 pass
 
